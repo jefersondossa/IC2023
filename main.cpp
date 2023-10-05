@@ -35,7 +35,7 @@
 
 std::ofstream printerrors("results_errors.txt",std::ios::app);
 
-enum EMatid  {ENone, EDomain, ELeft, EBottom, ERight, ETop, ECircle};
+enum EMatid  {ENone, EDomain, EDomain2, ELeft, EBottom, ERight, ETop, ECircle};
 
 /**
    @brief Reads the test mesh from gmsh
@@ -51,7 +51,7 @@ int main() {
     TPZLogger::InitializePZLOG();
 #endif
 
-    TPZGeoMesh* gmesh = ReadMeshFromGmsh("../holedplate.msh");
+    TPZGeoMesh* gmesh = ReadMeshFromGmsh("../Atividades Felipe/Geograde/Geograde.msh");
 
     {
         // Prints gmesh mesh properties
@@ -108,23 +108,56 @@ int main() {
 
 void InsertMaterials(TPZCompMesh *cmesh){
 
-    double E = 1.;
-    double nu = .3;
+    //Material do Solo
+    double E1 = 1.;
+    double nu1 = .1;
 
     TPZElasticity2D* matElast = new TPZElasticity2D(EDomain);
-    matElast -> SetElasticity(E,nu);
+    matElast -> SetElasticity(E1,nu1);
 
     cmesh->InsertMaterialObject(matElast);
 
+    //Material da Geograde.
+    double E2 = 1000;
+    double nu2 =.49;
+
+    TPZElasticity2D* matElast2 = new TPZElasticity2D(EDomain2);
+    matElast2 -> SetElasticity(E2,nu2);
+
+    cmesh->InsertMaterialObject(matElast2);
+
+    //Problema vetorial:
+
+    /*
+    -> Domain = mat solo; 
+    -> Domain2 = mat geograde; 
+    -> Left = laterais e fundo fixos; 
+    -> Top = solo sob tensão; 
+    -> Right = geograde
+    */
+
     TPZFMatrix<STATE> val1(2,2,0.);
     TPZManVector<STATE> val2(2,0.);
-    TPZBndCondT<STATE> *BCond1 = matElast->CreateBC(matElast, ELeft, 0, val1, val2);
+    TPZManVector<STATE> val3(2,0.);
+
+    val2[0]=8;
+    val2[1]=0;
+
+    TPZBndCondT<STATE> *BCond1 = matElast->CreateBC(matElast, ELeft, 3, val1, val2);
     cmesh->InsertMaterialObject(BCond1);
 
-    val2[0]=1.;
-    TPZBndCondT<STATE> *BCond2 = matElast->CreateBC(matElast, ERight, 0, val1, val2);
+    val2[0]=0;
+    val2[1]=0;
+
+    TPZBndCondT<STATE> *BCond3 = matElast->CreateBC(matElast, ERight, 0, val1, val2);
+    cmesh->InsertMaterialObject(BCond3);
+
+    val2[0]=0;
+    val2[1]=-2;
+
+    TPZBndCondT<STATE> *BCond2 = matElast->CreateBC(matElast, ETop, 1, val1, val2);
     cmesh->InsertMaterialObject(BCond2);
-   
+
 }
 
 
@@ -140,6 +173,7 @@ TPZGeoMesh* ReadMeshFromGmsh(std::string file_name)
         // o matid que voce mesmo escolher
         TPZManVector<std::map<std::string,int>,4> stringtoint(4);
         stringtoint[2]["Domain"] = EDomain;
+        stringtoint[2]["Domain2"] = EDomain2;
         stringtoint[1]["Left"] = ELeft;
         stringtoint[1]["Right"] = ERight;
         stringtoint[1]["Top"] = ETop;
