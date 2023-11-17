@@ -32,6 +32,7 @@
 #include "TPZH1ApproxCreator.h"
 #include <iostream>
 #include <fstream>
+#include <cmath>
 #include "Poisson/TPZMatPoisson.h"
 #include "TPZGeoMeshTools.h"
 #include "Projection/TPZL2Projection.h"
@@ -59,7 +60,8 @@ int main() {
 
     // TPZGeoMesh* gmesh = ReadMeshFromGmsh("../carro.msh");
 
-    
+        
+
         TPZVec<int> matidsx(3);
         matidsx[0] = 1; 
         matidsx[1] = 2; 
@@ -137,6 +139,35 @@ int main() {
     TPZFMatrix<double> Fy(nequationy,1) , Zy(nequationy,1);
     Kx.Assemble(Fy,NULL);
     Mx.Assemble(Zy,NULL);
+
+    TPZFMatrix<STATE> matAuxx(nequationx,nequationx);
+    TPZAutoPointer<TPZGuiInterface> guiInterfacex;
+    Kx.Assemble(matAuxx,Fx,guiInterfacex);
+    matAuxx.Print("Kx = ", std::cout,EMathematicaInput);
+
+    TPZFMatrix<STATE> matAuxy(nequationy,nequationy);
+    TPZAutoPointer<TPZGuiInterface> guiInterfacey;
+    Ky.Assemble(matAuxy,Fy,guiInterfacey);
+    matAuxy.Print("Ky = ", std::cout,EMathematicaInput);
+
+    int modos = 5;
+    double e = 10;
+    int limite = std::pow(10,-10);
+
+    for (int i = 0; i < modos; i++){
+        while( e > limite ){
+            // Resolve βxi
+            // Resolve δxi
+            // Resolve Zx 
+            // Resolve (Kx + Mx)Φpn = Fx − Z (problema 12)
+            // Resolve βyi
+            // Resolve δyi
+            // Resolve Zy 
+            // Resolve (Ky + My)Ψpn = Fy − Z (problema 22)
+            // Calcula e
+            e = std::pow(10,-11);
+        }
+    }
 
 
     //Prints gmesh mesh properties
