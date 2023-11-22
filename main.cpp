@@ -37,6 +37,16 @@
 #include "TPZGeoMeshTools.h"
 #include "Projection/TPZL2Projection.h"
 
+auto forcefunction = [](const TPZVec<REAL> &loc,
+    TPZVec<STATE>&u){
+    const auto &x=loc[0];
+    const auto &y=loc[1];
+    const auto &z=loc[2];
+
+    u[0] = 1.;
+};
+
+
 std::ofstream printerrors("results_errors.txt",std::ios::app);
 
 enum EMatid  {ENone, EDomain, ELeft, EBottom, ERight, ETop, ECircle};
@@ -47,10 +57,8 @@ enum EMatid  {ENone, EDomain, ELeft, EBottom, ERight, ETop, ECircle};
 */
 TPZGeoMesh* ReadMeshFromGmsh(std::string file_name);
 
-void InsertMaterialsx(TPZCompMesh* cmesh);
-void InsertMaterialsy(TPZCompMesh* cmesh);
-void InsertMaterialsL2Projectionx(TPZCompMesh* cmesh);
-void InsertMaterialsL2Projectiony(TPZCompMesh* cmesh);
+void InsertMaterials(TPZCompMesh* cmesh);
+void InsertMaterialsL2Projection(TPZCompMesh* cmesh);
 
 int main() {
 
@@ -60,23 +68,20 @@ int main() {
 
     // TPZGeoMesh* gmesh = ReadMeshFromGmsh("../carro.msh");
 
-        
 
-        TPZVec<int> matidsx(3);
-        matidsx[0] = 1; 
-        matidsx[1] = 2; 
-        matidsx[2] = 3; 
-
-        TPZVec<int> matidsy(3);
-        matidsy[0] = EDomain; 
-        matidsy[1] = ELeft; 
-        matidsy[2] = ERight; 
+        TPZVec<int> matids(3);
+        matids[0] = EDomain; 
+        matids[1] = ELeft; 
+        matids[2] = ERight; 
 
         auto gmeshx = TPZGeoMeshTools::CreateGeoMesh1D(0., 2., 5,
-                    matidsx, true);
-
+                    matids, true);
+        auto gmeshxm = TPZGeoMeshTools::CreateGeoMesh1D(0., 2., 5,
+                    matids, true);
         auto gmeshy = TPZGeoMeshTools::CreateGeoMesh1D(0., 2., 10,
-                    matidsy, true);
+                    matids, true);
+        auto gmeshym = TPZGeoMeshTools::CreateGeoMesh1D(0., 2., 10,
+                    matids, true);
 
     {
         // Prints gmesh mesh properties
@@ -103,25 +108,28 @@ int main() {
     TPZCompMesh *cmeshxk = new TPZCompMesh(gmeshx); 
     cmeshxk->SetDefaultOrder(1);
     cmeshxk->SetDimModel(1);
-    TPZCompMesh *cmeshxm = cmeshxk->Clone();
+    TPZCompMesh *cmeshxm = new TPZCompMesh(gmeshxm);
+    cmeshxm->SetDefaultOrder(1);
+    cmeshxm->SetDimModel(1);
 
     TPZCompMesh *cmeshyk = new TPZCompMesh(gmeshy); 
     cmeshyk->SetDefaultOrder(1);
     cmeshyk->SetDimModel(1);
-    TPZCompMesh *cmeshym = cmeshyk->Clone();
+    TPZCompMesh *cmeshym = new TPZCompMesh(gmeshym);
+    cmeshym->SetDefaultOrder(1);
+    cmeshym->SetDimModel(1);
 
     //Insert Materials
-    InsertMaterialsx(cmeshxk);
-    InsertMaterialsL2Projectionx(cmeshxm);
+    InsertMaterials(cmeshxk);
+    InsertMaterialsL2Projection(cmeshxm);
 
     cmeshxk->SetAllCreateFunctionsContinuous();
     cmeshxk->AutoBuild();
     cmeshxm->SetAllCreateFunctionsContinuous();
     cmeshxm->AutoBuild();
 
-
-    InsertMaterialsy(cmeshyk);
-    InsertMaterialsL2Projectiony(cmeshym);
+    InsertMaterials(cmeshyk);
+    InsertMaterialsL2Projection(cmeshym);
 
     cmeshyk->SetAllCreateFunctionsContinuous();
     cmeshyk->AutoBuild();
@@ -130,44 +138,47 @@ int main() {
 
     TPZSSpStructMatrix<STATE,TPZStructMatrixOR<STATE>> Kx(cmeshxk), Mx(cmeshxm);
     int nequationx = cmeshxk->NEquations(); 
-    TPZFMatrix<double> Fx(nequationx,1) , Zx(nequationx,1);
-    Kx.Assemble(Fx,NULL);
-    Mx.Assemble(Zx,NULL);
-
-    TPZSSpStructMatrix<STATE,TPZStructMatrixOR<STATE>> Ky(cmeshyk), My(cmeshym);
-    int nequationy = cmeshyk->NEquations(); 
-    TPZFMatrix<double> Fy(nequationy,1) , Zy(nequationy,1);
-    Kx.Assemble(Fy,NULL);
-    Mx.Assemble(Zy,NULL);
-
-    TPZFMatrix<STATE> matAuxx(nequationx,nequationx);
+    TPZFMatrix<double> Fx(nequationx,1,0.) , Zx(nequationx,1,0.);
+    TPZFMatrix<STATE> matAuxx(nequationx,nequationx,0.);
+    TPZFMatrix<STATE> matAuxxM(nequationx,nequationx,0.);
     TPZAutoPointer<TPZGuiInterface> guiInterfacex;
     Kx.Assemble(matAuxx,Fx,guiInterfacex);
     matAuxx.Print("Kx = ", std::cout,EMathematicaInput);
+    Fx.Print("Fx = ", std::cout,EMathematicaInput);
+    Mx.Assemble(matAuxxM,Fx,guiInterfacex);
+    matAuxxM.Print("Mx = ", std::cout,EMathematicaInput);
+    
 
-    TPZFMatrix<STATE> matAuxy(nequationy,nequationy);
-    TPZAutoPointer<TPZGuiInterface> guiInterfacey;
-    Ky.Assemble(matAuxy,Fy,guiInterfacey);
+    TPZSSpStructMatrix<STATE,TPZStructMatrixOR<STATE>> Ky(cmeshyk), My(cmeshym);
+    int nequationy = cmeshyk->NEquations(); 
+    TPZFMatrix<double> Fy(nequationy,1,0.) , Zy(nequationy,1,0.);  
+
+    TPZFMatrix<STATE> matAuxy(nequationy,nequationy,0.);
+    TPZFMatrix<STATE> matAuxyM(nequationy,nequationy,0.);
+    Ky.Assemble(matAuxy,Fy,guiInterfacex);
     matAuxy.Print("Ky = ", std::cout,EMathematicaInput);
+    Fy.Print("Fy = ", std::cout,EMathematicaInput);
+    My.Assemble(matAuxyM,Fy,guiInterfacex);
+    matAuxyM.Print("My = ", std::cout,EMathematicaInput);
 
     int modos = 5;
     double e = 10;
     int limite = std::pow(10,-10);
 
-    for (int i = 0; i < modos; i++){
-        while( e > limite ){
-            // Resolve βxi
-            // Resolve δxi
-            // Resolve Zx 
-            // Resolve (Kx + Mx)Φpn = Fx − Z (problema 12)
-            // Resolve βyi
-            // Resolve δyi
-            // Resolve Zy 
-            // Resolve (Ky + My)Ψpn = Fy − Z (problema 22)
-            // Calcula e
-            e = std::pow(10,-11);
-        }
-    }
+    // for (int i = 0; i < modos; i++){
+    //     while( e > limite ){
+    //         // Resolve βxi
+    //         // Resolve δxi
+    //         // Resolve Zx 
+    //         // Resolve (Kx + Mx)Φpn = Fx − Z (problema 12)
+    //         // Resolve βyi
+    //         // Resolve δyi
+    //         // Resolve Zy 
+    //         // Resolve (Ky + My)Ψpn = Fy − Z (problema 22)
+    //         // Calcula e
+    //         e = std::pow(10,-11);
+    //     }
+    // }
 
 
     //Prints gmesh mesh properties
@@ -226,7 +237,7 @@ int main() {
 
 
 
-void InsertMaterialsx(TPZCompMesh *cmeshx){
+void InsertMaterials(TPZCompMesh *cmeshx){
 
     // double E = 1.;
     // double nu = .1;
@@ -252,72 +263,41 @@ void InsertMaterialsx(TPZCompMesh *cmeshx){
     // cmesh->InsertMaterialObject(BCond3);
 
 
-    TPZMatPoisson<STATE>* matpoisson = new TPZMatPoisson(1,1);
+    TPZMatPoisson<STATE>* matpoisson = new TPZMatPoisson(EDomain,1);
     cmeshx->InsertMaterialObject(matpoisson);
     // matpoisson -> SetScaleFactor(2);
-
-    TPZFMatrix<STATE> val1(1,1,0.);
-    TPZManVector<STATE> val2(1,0.);
-    
-    TPZBndCondT<STATE> *BCond1 = matpoisson -> CreateBC(matpoisson , 2, 0, val1, val2);
-    cmeshx->InsertMaterialObject(BCond1);
-
-    val2[0] = 40;
-    TPZBndCondT<STATE> *BCond2 = matpoisson -> CreateBC(matpoisson , 3, 1, val1, val2);
-    cmeshx->InsertMaterialObject(BCond2);
-
-}
-
-void InsertMaterialsy(TPZCompMesh *cmeshy){
-
-    TPZMatPoisson<STATE>* matpoisson = new TPZMatPoisson(EDomain,1);
-    cmeshy->InsertMaterialObject(matpoisson);
-    // matpoisson -> SetScaleFactor(2);
+    matpoisson->SetForcingFunction(forcefunction,1);
 
     TPZFMatrix<STATE> val1(1,1,0.);
     TPZManVector<STATE> val2(1,0.);
     
     TPZBndCondT<STATE> *BCond1 = matpoisson -> CreateBC(matpoisson , ELeft, 0, val1, val2);
-    cmeshy->InsertMaterialObject(BCond1);
+    cmeshx->InsertMaterialObject(BCond1);
 
-    val2[0] = 80;
-    TPZBndCondT<STATE> *BCond2 = matpoisson -> CreateBC(matpoisson , ERight, 1, val1, val2);
-    cmeshy->InsertMaterialObject(BCond2);
+    // val2[0] = 0;
+    TPZBndCondT<STATE> *BCond2 = matpoisson -> CreateBC(matpoisson , ERight, 0, val1, val2);
+    cmeshx->InsertMaterialObject(BCond2);
 
 }
 
-void InsertMaterialsL2Projectionx(TPZCompMesh *cmeshxk){
 
-    TPZL2Projection<STATE>* matpoisson = new TPZL2Projection(1,1);
+void InsertMaterialsL2Projection(TPZCompMesh *cmeshxk){
+
+    TPZL2Projection<STATE>* matpoisson = new TPZL2Projection(EDomain,1);
     cmeshxk->InsertMaterialObject(matpoisson);
     // matpoisson -> SetScaleFactor(2);
 
     TPZFMatrix<STATE> val1(1,1,0.);
     TPZManVector<STATE> val2(1,0.);
     
-    TPZBndCondT<STATE> *BCond1 = matpoisson -> CreateBC(matpoisson , 2, 0, val1, val2);
-    cmeshxk->InsertMaterialObject(BCond1);
-
-    val2[0] = 0;
-    TPZBndCondT<STATE> *BCond2 = matpoisson -> CreateBC(matpoisson , 3, 1, val1, val2);
-    cmeshxk->InsertMaterialObject(BCond2);
-
-}
-void InsertMaterialsL2Projectiony(TPZCompMesh *cmeshyk){
-
-    TPZL2Projection<STATE>* matpoisson = new TPZL2Projection(EDomain,1);
-    cmeshyk->InsertMaterialObject(matpoisson);
-    // matpoisson -> SetScaleFactor(2);
-
-    TPZFMatrix<STATE> val1(1,1,0.);
-    TPZManVector<STATE> val2(1,0.);
-    
     TPZBndCondT<STATE> *BCond1 = matpoisson -> CreateBC(matpoisson , ELeft, 0, val1, val2);
-    cmeshyk->InsertMaterialObject(BCond1);
+    cmeshxk->InsertMaterialObject(BCond1);
+    matpoisson->SetForcingFunction(forcefunction,1);
+
 
     val2[0] = 0;
     TPZBndCondT<STATE> *BCond2 = matpoisson -> CreateBC(matpoisson , ERight, 1, val1, val2);
-    cmeshyk->InsertMaterialObject(BCond2);
+    cmeshxk->InsertMaterialObject(BCond2);
 
 }
 
