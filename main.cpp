@@ -296,7 +296,7 @@ void InsertMaterialsL2Projection(TPZCompMesh *cmeshxk){
 
 
     val2[0] = 0;
-    TPZBndCondT<STATE> *BCond2 = matpoisson -> CreateBC(matpoisson , ERight, 1, val1, val2);
+    TPZBndCondT<STATE> *BCond2 = matpoisson -> CreateBC(matpoisson , ERight, 0, val1, val2);
     cmeshxk->InsertMaterialObject(BCond2);
 
 }
